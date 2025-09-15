@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: bitnami/postgresql
+    container_name: intervita-pg
+    ports:
+      - 5433:5432
+    environment:
+      - POSTGRESQL_USERNAME=docker
+      - POSTGRESQL_PASSWORD=docker
+      - POSTGRESQL_DATABASE=intervita

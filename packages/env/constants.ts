@@ -1,0 +1,1 @@
+export const INTERVIEW_MAX_MINUTES = 5

@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  name              String?
+  email             String    @unique
+  emailValidatedAt  DateTime? @map("email_validated_at")
+  passwordHash      String?   @map("password_hash")
+  avatarUrl         String?   @map("avatar_url")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  interviews        Interview[]
+  resumes           Resume[]
+  jobContexts       JobContext[]
+  tokens            Token[]
+  accounts          Account[]
+  
+  // Simplified subscription tracking
+  subscriptionPlan      SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id], onDelete: SetNull)
+  subscriptionPlanId    String?              @map("subscription_plan_id")
+  subscriptionStart     DateTime?         @map("subscription_start")
+  subscriptionEnd       DateTime?         @map("subscription_end")
+  currentPeriodStart    DateTime?         @map("current_period_start") // Start of current billing period
+  currentPeriodEnd      DateTime?         @map("current_period_end") // End of current billing period
+
+  @@index([email])
+  @@map("users")
+}
+
+enum BillingPeriod {
+  MONTHLY
+  ANNUAL
+}
+
+model SubscriptionPlan {
+  id                    String   @id @default(uuid())
+  name                  String   
+  price                 Float?   // Monthly cost in dollars (null for free plans)
+  annualPrice           Float?   @map("annual_price") // Annual cost in dollars (discount)
+  billingPeriod         BillingPeriod @default(MONTHLY) @map("billing_period")
+  interviewMinutes      Int      @map("interview_minutes") // Total minutes allowed per billing period
+  maxInterviews         Int      @default(3) @map("max_interviews") // Max number of interviews per billing period
+  maxInterviewDuration  Int      @default(5) @map("max_interview_duration") // Maximum duration of single interview in minutes
+  isActive              Boolean  @default(true) @map("is_active")
+  description           String?  @db.Text
+  features              String[] // Array of features included in this plan
+  stripePriceId         String?  @map("stripe_price_id")
+  stripeAnnualPriceId   String?  @map("stripe_annual_price_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  users                 User[]
+
+  @@index([isActive])
+  @@map("subscription_plans")
+}
+
+enum TokenType {
+  PASSWORD_RECOVER
+  EMAIL_VALIDATION
+  EMAIL_CHANGE_VALIDATION
+}
+
+model Token {
+  id        String    @id @default(uuid())
+  type      TokenType
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime? @map("expires_at")
+  payload   String?
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String    @map("user_id")
+
+  @@index([userId, type])
+  @@map("tokens")
+}
+
+enum AccountProvider {
+  GITHUB
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
+model Account {
+  id                String          @id @default(uuid())
+  provider          AccountProvider
+  providerAccountId String          @map("provider_account_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String          @map("user_id")
+
+  @@unique([provider, userId])
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  LIMIT_EXCEEDED
+}
+
+model Interview {
+  id                String          @id @default(uuid())
+  status            InterviewStatus @default(SCHEDULED)
+  startTime         DateTime?
+  endTime           DateTime?
+  roomName          String          @map("room_name")
+  token             String?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String          @map("user_id")
+  resume            Resume          @relation(fields: [resumeId], references: [id], onDelete: Restrict)
+  resumeId          String          @map("resume_id")
+  jobContext        JobContext      @relation(fields: [jobContextId], references: [id], onDelete: Restrict)
+  jobContextId      String          @map("job_context_id")
+  questions         Question[]
+  messages          TranscriptionMessage[]
+  report            Report?
+
+  @@index([userId, status])
+  @@index([startTime])
+  @@map("interviews")
+}
+
+model Resume {
+  id        String    @id @default(uuid())
+  fileUrl   String?   @map("file_url") @db.Text
+  content   Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String    @map("user_id")
+  interviews Interview[]
+
+  @@index([userId])
+  @@map("resumes")
+}
+
+
+model JobContext {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  fileUrl     String?   @map("file_url") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id")
+  interviews  Interview[]
+
+  @@index([userId])
+  @@map("job_contexts")
+}
+
+model Question {
+  id          String    @id @default(uuid())
+  text        String    @db.Text
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId String    @map("interview_id")
+  response    Response?
+
+  @@index([interviewId, order])
+  @@map("questions")
+}
+
+model Response {
+  id          String    @id @default(uuid())
+  text        String    @db.Text
+  timestamp   DateTime  @default(now())
+  rating      Float?    @db.DoublePrecision
+  feedback    String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId  String    @unique @map("question_id")
+
+  @@map("responses")
+}
+
+model TranscriptionMessage {
+  id          String    @id @default(uuid())
+  message     String    @db.Text
+  name        String
+  isSelf      Boolean   @default(false) @map("is_self")
+  timestamp   DateTime  @default(now())
+
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId String    @map("interview_id")
+
+  @@index([interviewId, timestamp])
+  @@map("transcription_messages")
+}
+
+enum InterviewType {
+  TECHNICAL
+  BEHAVIORAL
+  SYSTEM_DESIGN
+  CASE_STUDY
+  MIXED
+}
+
+model Report {
+  id                    String            @id @default(uuid())
+  interviewType         InterviewType? @map("interview_type")
+  date                  DateTime       @default(now())
+  domain                String?
+  duration              Int?           // Duration in minutes
+  relevance             Float?         @db.DoublePrecision
+  accuracy              Float?         @db.DoublePrecision
+  clarity               Float?         @db.DoublePrecision
+  coherence             Float?         @db.DoublePrecision
+  conciseness           Float?         @db.DoublePrecision
+  technicalProficiency  Float?         @db.DoublePrecision @map("technical_proficiency")
+  professionalism       Float?         @db.DoublePrecision
+  relevanceToJobContext Float?         @db.DoublePrecision @map("relevance_to_job_context")
+  feedback              String         @db.Text
+  strengths             String?        @db.Text
+  weaknesses            String?        @db.Text
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  interview             Interview      @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewId           String         @unique @map("interview_id")
+
+  @@map("reports")
+}
