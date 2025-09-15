@@ -2,6 +2,11 @@
 
 > **Built for the [Code with Kiro Hackathon](https://kiro.devpost.com/) - Productivity & Workflow Tools Category**
 
+## 🔗 Repository Links
+
+- **Main Application**: [https://github.com/mainonline/intervita-h-app](https://github.com/mainonline/intervita-h-app)
+- **Vision Agent**: [https://github.com/mainonline/intervita-h-vision](https://github.com/mainonline/intervita-h-vision)
+
 InterVita is an AI-powered interview practice platform that helps job seekers prepare for interviews with personalized feedback, realistic simulations, and progress tracking. Built entirely using [Kiro](https://kiro.dev/), this project showcases how AI-assisted development can accelerate the creation of complex, production-ready applications.
 
 <table style="width:100%">
